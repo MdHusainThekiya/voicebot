@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voice to Voice App</title>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+
+  <style>
+    body {
+      background-color: #1e1e1e;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      flex-direction: column;
+      color: white;
+      font-family: Arial, sans-serif;
+    }
+
+    .mic-button {
+      background: white;
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      transition: transform 0.2s;
+      font-size: 40px;
+    }
+
+    .mic-button:active {
+      transform: scale(0.9);
+    }
+
+    .mic-button.listening {
+      background: white;
+      animation: pulse 1s infinite;
+    }
+
+    #cancel-button {
+      position: absolute;
+      bottom: 50px;
+      background-color: rgba(255, 255, 255, 0.2);
+      color: white;
+      font-size: 24px;
+      border: none;
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      transition: background 0.3s, transform 0.2s;
+    }
+
+    #cancel-button:hover {
+      background-color: rgba(255, 255, 255, 0.4);
+    }
+
+    #cancel-button:active {
+      transform: scale(0.9);
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.2); }
+      100% { transform: scale(1); }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="mic-button" onclick="startListening()">🎙️</div>
+  <p id="status">Click the mic to start</p>
+  <button id="cancel-button" onclick="stopSpeaker()" style="display: none;"> ❌</button>
+
+  <script>
+    let recognizer;
+    let audioContext;
+    let recognizerNode;
+    let source;
+    let speechQueue = [];
+    let isSpeaking = false;
+
+
+    function stopSpeaker(params) {
+      speechQueue = [];
+      isSpeaking = false;
+      isSpeaking = false; // Reset flag
+      speechSynthesis.cancel();
+      document.querySelector(".mic-button").classList.add("listening");
+      document.querySelector(".mic-button").textContent = "🎙️";
+      document.getElementById("cancel-button").style.display = "none";
+      document.getElementById("status").textContent = "Listening...";
+    }
+
+    function processSpeechQueue() {
+      if (isSpeaking || speechQueue.length === 0) return; // Exit if already speaking or queue is empty
+
+      isSpeaking = true; // Mark speech as in progress
+      const textToSpeak = speechQueue.shift(); // Get next text from queue
+      document.querySelector(".mic-button").classList.remove("listening");
+      document.querySelector(".mic-button").textContent = "🔊";
+      document.getElementById("cancel-button").style.display = "block";
+
+      let textContent = document.getElementById("status").textContent;
+      document.getElementById("status").textContent = textToSpeak;
+
+      speakText(textToSpeak, () => {
+        isSpeaking = false; // Reset flag
+        document.querySelector(".mic-button").classList.add("listening");
+        document.querySelector(".mic-button").textContent = "🎙️";
+        document.getElementById("cancel-button").style.display = "none";
+        document.getElementById("status").innerText = "Listening...";
+        processSpeechQueue(); // Process next text in queue
+      });
+    }
+
+    function convertFloat32ToPCM(float32Array) {
+      const pcm16Array = new Int16Array(float32Array.length);
+      for (let i = 0; i < float32Array.length; i++) {
+        let sample = float32Array[i];
+        sample = Math.max(-1, Math.min(1, sample)); // Clamping
+        pcm16Array[i] = sample < 0 ? sample * 32768 : sample * 32767; // Convert to 16-bit PCM
+      }
+      return pcm16Array.buffer; // Return as ArrayBuffer for WebSocket transmission
+    }
+
+    async function startListening() {
+
+
+      document.getElementById("status").innerText = "Connecting to Socket.io Server...";
+      const socket = io("https://mycoolapp.loca.lt/");
+
+      socket.on("connect", () => document.getElementById("status").innerText = "Connected to Socket.io Server...");
+      socket.on("connect_error", (error) => document.getElementById("status").innerText = `Socket.io Connection Error: ${error.message}`);
+      socket.on("disconnect", () => document.getElementById("status").innerText = `Socket.io Disconnected`);
+
+      socket.on("partial-transcription", (text) => {
+        document.getElementById("status").textContent = text;
+        speechQueue = [];
+        isSpeaking = false;
+      });
+
+      socket.on("final-transcription", async (text) => {
+        speechQueue.push(text);
+        processSpeechQueue();
+      });
+
+      try {
+
+        emit(socket, 'log', "started microphone access");
+
+        document.getElementById("status").innerText = "Please Allow microphone access!"
+
+        const mediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1, sampleRate: 16000 },
+        });
+
+        document.getElementById("status").innerText = "Microphone access granted!"
+
+        emit(socket, 'log', { msg: "got microphone access", mediaStreamId: mediaStream.id });
+
+        const audioContext = new AudioContext({ sampleRate: 16000 });
+        const source = audioContext.createMediaStreamSource(mediaStream);
+        const processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+        processor.onaudioprocess = (event) => {
+          const audioBuffer = event.inputBuffer.getChannelData(0);
+          const pcmData = convertFloat32ToPCM(audioBuffer);
+          emit(socket, "rawaudio", pcmData);
+        };
+
+        source.connect(processor);
+        processor.connect(audioContext.destination);
+
+        document.querySelector(".mic-button").classList.add("listening");
+        document.querySelector(".mic-button").textContent = "🎙️";
+        document.getElementById("cancel-button").style.display = "none";
+        document.getElementById("status").innerText = "Listening...";
+
+      } catch (error) {
+        speechQueue.push(`Error accessing microphone!, ${error.message}`);
+        processSpeechQueue();
+        console.error("Error accessing microphone:", error);
+        setTimeout(() => {
+          emit(socket, 'log', { msg: "Error accessing microphone", error: error.message, stack: error.stack });
+        }, 5000);
+      }
+    }
+
+    function emit(socket, roomName, data) {
+      if (socket && socket.connected) {
+        socket.emit(roomName, data);
+      }
+    }
+
+    async function speakText(text, callback) {
+      if (!text || text.trim() === "") return; // Avoid speaking empty text
+
+      speechSynthesis.cancel(); // Stop any previous speech
+
+      const speech = new SpeechSynthesisUtterance(text);
+      speech.onend = callback;
+      speech.lang = "en-US";
+      speech.rate = 1;
+      speech.volume = 1;
+      await speechSynthesis.speak(speech);
+    }
+  </script>
+</body>
+
+</html>
