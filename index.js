@@ -30,11 +30,9 @@ const client = new OpenAI({
 app.use(express.json());
 app.use(cors());
 
-app.get('/', (req, res) => { res.status(200).send("API is working fine ...") })
-
-// app.get('/', (req, res) => {
-//   res.sendFile(path.join(__dirname, 'public/index.html'));
-// });
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public/index.html'));
+});
 
 app.get("/api/stream", (req, res) => {
   res.json({ message: "Streaming API working!" });
