@@ -135,7 +135,7 @@
 
 
       document.getElementById("status").innerText = "Connecting to Socket.io Server...";
-      const socket = io("https://voicebot-yn70.onrender.com/");
+      const socket = io("https://ai-mdhusainthekiya.vercel.app/");
 
       socket.on("connect", () => document.getElementById("status").innerText = "Connected to Socket.io Server...");
       socket.on("connect_error", (error) => document.getElementById("status").innerText = `Socket.io Connection Error: ${error.message}`);
