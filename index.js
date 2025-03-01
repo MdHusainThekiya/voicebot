@@ -6,6 +6,7 @@ const { Server } = require("socket.io");
 const vosk = require('vosk');
 const cors = require('cors');
 const OpenAI = require('openai');
+const axios = require('axios');
 
 const app = express();
 const server = http.createServer(app);
@@ -37,12 +38,8 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public/index.html'));
 });
 
-app.get("/api/stream", (req, res) => {
-  res.json({ message: "Streaming API working!" });
-});
-
-app.get("/api/stream", (req, res) => {
-  res.json({ message: "Streaming API working!" });
+app.get("/api/uptime", (req, res) => {
+  res.json({ message: "API working!" });
 });
 
 app.get('/stream', async (req, res) => {
@@ -127,6 +124,15 @@ const sendToOllama = async (text, callback) => {
   callback(line);
   line = "";
 }
+
+setInterval(async () => {
+  try {
+    const result = await axios.get(`https://voicebot-yn70.onrender.com/api/uptime`);
+    console.log("[index]::uptime status :" + result && result.status)
+  } catch (error) {
+    console.error('[index]::uptime error::', typeof(error), error);
+  }
+}, 60000);
 
 server.listen(PORT, async () => { 
   console.log("Server running on http://localhost:"+ PORT)
