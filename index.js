@@ -34,6 +34,10 @@ app.get('/', (req, res) => {
 app.use(express.json());
 app.use(cors());
 
+app.get("/api/stream", (req, res) => {
+  res.json({ message: "Streaming API working!" });
+});
+
 app.get('/stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/plain');
   res.setHeader('Transfer-Encoding', 'chunked');
