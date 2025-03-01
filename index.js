@@ -12,7 +12,6 @@ const server = http.createServer(app);
 const io = new Server(server, {
   transports: ["polling", "websocket", "webtransport"]
 });
-app.use(cors());
 
 const PORT = process.env.PORT || 8000
 const MODEL_PATH = "./vosk-model-small-en-in-0.4";
@@ -31,6 +30,9 @@ const client = new OpenAI({
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public/index.html'));
 });
+
+app.use(express.json());
+app.use(cors());
 
 app.get('/stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/plain');
