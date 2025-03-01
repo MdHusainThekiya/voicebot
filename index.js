@@ -10,6 +10,9 @@ const OpenAI = require('openai');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
+  cors: {
+    origin: "*"
+  },
   transports: ["polling", "websocket", "webtransport"]
 });
 
